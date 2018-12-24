@@ -1,0 +1,169 @@
+#!/bin/sh
+
+# Simple script to run build commands in docker.
+
+source dbuild.conf
+
+tempFileName="/tmp/dbuild.$$"
+
+run_print() {
+    echo $1
+    eval $1
+}
+
+build_container() {
+    # Always build the docker image; because of caching it is cheap
+    run_print "cd build-container; docker build --iidfile $tempFileName -t $name-build ."
+    cd ..
+
+    if [ $? -ne 0 ]
+    then
+        # If the build command failed, then exit
+        exit $?
+    fi
+
+    # Use the id instead of the tag so we can support multiple different
+    # versions building on the same machine.
+    id=`cat $tempFileName`
+    rm $tempFileName
+}
+
+deploy_container() {
+    run_print "docker build --iidfile $tempFileName -t $name ."
+
+    if [ $? -ne 0 ]
+    then
+        # If the build command failed, then exit
+        exit $?
+    fi
+
+    # Use the id instead of the tag so we can support multiple different
+    # versions building on the same machine.
+    did=`cat $tempFileName`
+    rm $tempFileName
+}
+
+run_build() {
+    build_container
+
+    # Run the given command in the build container. If nothing is provided, default
+    # the build container default.
+    run_print "docker run -ti --rm $build_args $id $@"
+}
+
+run_deploy() {
+    deploy_container
+
+    # Run the given command in the deploy container. If nothing is provided, default
+    # the deploy container default.
+    run_print "docker run -ti --rm $run_args $did $@"
+}
+
+if [ "$#" -eq 0 ]
+then
+    run_build "$@"
+    exit $?
+fi
+
+if [ $1 == "-d" ]
+then
+    set -x
+    shift
+fi
+
+# Try again to make dbuild -d work
+if [ "$#" -eq 0 ]
+then
+    run_build "$@"
+    exit $?
+fi
+
+if [ $1 == "brun" ]
+then
+    shift
+    run_build "$@"
+    exit $?
+fi
+
+if [ $1 == "run" ]
+then
+    run_build
+
+    shift
+
+    run_deploy
+    exit $?
+fi
+
+if [ $1 == "deploy-container" ]
+then
+    deploy_container
+    exit $?
+fi
+
+if [ $1 == "build-container" ]
+then
+    build_container
+    exit $?
+fi
+
+if [ $1 == "clean" ]
+then
+    if [ -n "$output_dirs" ]
+    then
+        rm -rf $output_dirs
+    fi
+    exit 0
+fi
+
+if [ $1 == "veryclean" ]
+then
+    if [ -n "$output_dirs" ]
+    then
+        rm -rf $output_dirs
+        exit $?
+    fi
+    docker rm $name-build
+    docker rm $name
+    exit 0
+fi
+
+kube_cleanup() {
+    # Tear things down
+    run_print "kubectl -f deploy/$name-test delete"
+}
+
+if [ $1 == "kube" ]
+then
+    # Build the code
+    run_build
+    if [ $? -ne 0 ]
+    then
+        # If the build command failed, then exit
+        exit $?
+    fi
+
+    # Build the deploy container.
+    deploy_container
+    if [ $? -ne 0 ]
+    then
+        # If the build command failed, then exit
+        exit $?
+    fi
+
+    trap kube_cleanup 2
+
+    # Deploy the app as a compact deployment
+    run_print "kubectl -f deploy/$name-test create"
+
+    # Tail the logs
+    stern $name*
+
+    kube_cleanup
+fi
+
+if [ $1 == "secret" ]
+then
+    kubectl delete secret $name-creds
+    kubectl create secret generic $name-creds --from-file $HOME/.credentials
+fi
