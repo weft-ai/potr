@@ -2,9 +2,9 @@
 
 # Simple script to run build commands in docker.
 
-source dbuild.conf
+source potr.conf
 
-tempFileName="/tmp/dbuild.$$"
+tempFileName="/tmp/potr.$$"
 
 run_print() {
     echo $1
