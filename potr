@@ -82,14 +82,28 @@ then
     exit $?
 fi
 
-if [ $1 == "brun" ]
+if [ $1 == "help" ] || [ $1 == "-h" ] || [ $1 == "--help" ]
+then
+    echo "Potr is a simple container build script."
+    echo "it is meant only to perform common out of container"
+    echo "operations (build a build container, run it etc.)"
+    echo "Run with no arguments it will run the build container"
+    echo "without passing any arguments."
+    echo "commands:"
+    echo " run 'cmd' - run the given command inside a build container instance"
+    echo " drun 'cmd' - run the given command inside a deploy container."
+    echo " push - build the deployment container and push it to the repo noted in the potr.conf file"
+    exit 0
+fi
+
+if [ $1 == "run" ]
 then
     shift
     run_build "$@"
     exit $?
 fi
 
-if [ $1 == "run" ]
+if [ $1 == "drun" ]
 then
     run_build
 
