@@ -2,6 +2,8 @@
 
 # Simple script to run build commands in docker.
 
+set -e
+
 version="latest"
 
 if [ ! -f "potr.conf" ]
@@ -24,7 +26,7 @@ run_print() {
 
 build_container() {
     # Always build the docker image; because of caching it is cheap
-    run_print "cd build-container; docker build --iidfile $tempFileName -t $name-build ."
+    run_print "cd build-container; docker build --iidfile $tempFileName -t potr-temp-$$ ."
     cd ..
 
     if [ $? -ne 0 ]
@@ -36,7 +38,11 @@ build_container() {
     # Use the id instead of the tag so we can support multiple different
     # versions building on the same machine.
     id=`cat $tempFileName`
+    shortId=${id: -14}
     rm $tempFileName
+
+    run_print "docker tag $id $name-build-$shortId"
+    docker rmi potr-temp-$$
 
     check_and_update_lock_file
 }
@@ -44,20 +50,38 @@ build_container() {
 check_and_update_lock_file() {
     # Get a hash of the build container
     mkdir -p $hashDockerPath
+
+    docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}' $id > $hashDockerPath/env
+    docker inspect -f '{{json .Config.Cmd}}' $id > $hashDockerPath/cmd
+    docker inspect -f '{{json .Config.Entrypoint}}' $id > $hashDockerPath/entrypoint
+
+    hashDir="/potr/to-hash"
+
     cat << EOF > $hashDockerPath/Dockerfile
     FROM $id
-    FROM centos:7
 
-    COPY --from=0 / /to-hash
-    RUN tar --mtime='2019-01-01 00:00Z' --sort=name -cf /to-hash | md5sum > /build-container-hash.md5
-    CMD ["cat", "/build-container-hash.md5"]
+    FROM ubuntu:bionic-20190718
+
+    # Copy over the contents of the build container and metadata from the container.
+    COPY --from=0 / $hashDir/data
+    COPY env cmd entrypoint $hashDir/mdata/
+
+    WORKDIR $hashDir
+
+    # Hash all the data and mdata files. Ignore mtimes, since they will change each time you
+    # rebuild the container.
+    RUN tar --mtime='2019-01-01 00:00Z' --sort=name -cf - . | md5sum > /potr/hash
+
+    WORKDIR /potr
+
+    CMD ["cat", "hash"]
 EOF
 
-    docker build -t $name-build-hash-$id $hashDockerPath
+    docker build -t $name-build-$shortId-hash $hashDockerPath
 
     rm -rf $hashDockerPath
 
-    hash=`docker run --rm "$name-build-hash-$id"`
+    hash=`docker run --rm "$name-build-$shortId-hash"`
 
     # If the lock file exists, check the id of the built container against it
     if [ -f $lockFileName ]
@@ -139,13 +163,13 @@ if [ $1 == "help" ] || [ $1 == "-h" ] || [ $1 == "--help" ]
 then
     cat << EOF
 
-Potr is a simple container build script. it is meant only to perform common out of container operations (build a build container, run it etc.) Run with no arguments it will run the build container without passing any arguments.
+Potr is a simple container build script. it is meant only to perform common out-of-container operations (build a build container, run it etc.) Run with no arguments it will run the build container without passing any arguments.
 
 Commands:
 
     build [args]- run the build container, optionally providing extra commands (or arguments) to the build container.
     deploy - run the build container and create a deploy container locally.
-    update - update the locked container definition.
+    update - update the locked build container definition.
     clean - remove the build and deployment containers for this project.
     drun 'cmd' - run the given command inside a deploy container.
     push - build the deployment container and push it to the repo noted in the potr.conf file
@@ -194,10 +218,8 @@ fi
 
 if [ $1 == "clean" ]
 then
-    docker rmi $name-build
-    docker rmi $name
-    hashImages=`docker images -q $name-build-hash-*`
-    docker rmi $hashImages
+    images=`docker images -q $name-build-*`
+    docker rmi $images
     exit 0
 fi
 
