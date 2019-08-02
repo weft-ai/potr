@@ -74,6 +74,9 @@ check_and_update_lock_file() {
 
     WORKDIR /potr
 
+    # Generate a testing script used if we fail
+    RUN echo "cd $hashDir; find . -type f -print0 | sort -z | xargs -0 md5sum" > /potr/print_hashes.sh
+
     CMD ["cat", "hash"]
 EOF
 
@@ -81,7 +84,7 @@ EOF
 
     rm -rf $hashDockerPath
 
-    hash=`docker run --rm "$name-build-$shortId-hash"`
+    hash=`docker run --rm $name-build-$shortId-hash`
 
     # If the lock file exists, check the id of the built container against it
     if [ -f $lockFileName ]
@@ -100,6 +103,8 @@ EOF
             echo "container, which you need to fix."
             echo ""
             echo ""
+
+            describe_build_container
 
             exit 1
         fi
@@ -122,6 +127,10 @@ deploy_container() {
     # versions building on the same machine.
     did=`cat $tempFileName`
     rm $tempFileName
+}
+
+describe_build_container() {
+    docker run --rm $name-build-$shortId-hash bash /potr/print_hashes.sh
 }
 
 run_build() {
@@ -220,7 +229,7 @@ if [ $1 == "clean" ]
 then
     images=`docker images -q $name-build-*`
     docker rmi $images
-    exit 0
+    exit $?
 fi
 
 if [ $1 == "aws-docker-login" ]
