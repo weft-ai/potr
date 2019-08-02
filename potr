@@ -238,8 +238,8 @@ fi
 
 if [ $1 == "aws-docker-login" ]
 then
-    cmd="$aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION | tr -d '\r\n' | bash"
-    run_print 'bash -c "$cmd"'
+    login_cmd=`$aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION`
+    bash -c "$login_cmd"
 fi
 
 if [ $1 == "deploy" ]
