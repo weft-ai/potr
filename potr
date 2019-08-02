@@ -67,6 +67,7 @@ check_and_update_lock_file() {
     # Copy over the contents of the build container and metadata from the container.
     COPY --from=0 / $hashDir/data
     COPY env cmd entrypoint $hashDir/mdata/
+    RUN chmod -R 664 $hashDir/mdata/*
 
     WORKDIR $hashDir
 
