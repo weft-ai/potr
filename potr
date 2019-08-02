@@ -263,13 +263,12 @@ fi
 
 if [ $1 == "push" ]
 then
-    # Build the code
-    run_build
-    if [ $? -ne 0 ]
-    then
-        # If the build command failed, then exit
-        exit $?
-    fi
+    docker_repo=$2
+    shift
+    shift
+    tags=$@
+
+    echo $tags
 
     # Build the deploy container.
     deploy_container
@@ -279,6 +278,9 @@ then
         exit $?
     fi
 
-    run_print "docker tag $did $docker_repo/$name:$version"
-    run_print "docker push $docker_repo/$name:$version"
+    for version in ${tags}
+    do
+        run_print "docker tag $did $docker_repo:$version"
+        run_print "docker push $docker_repo:$version"
+    done
 fi
