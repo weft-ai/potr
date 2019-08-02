@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Simple script to run build commands in docker.
 
@@ -8,7 +8,7 @@ version="latest"
 
 if [ ! -f "potr.conf" ]
 then
-    echo "This directory doesn't appear to be a potr projectroot. No potr.conf file found."
+    echo "This directory doesn't appear to be a potr project root. No potr.conf file found."
 fi
 
 source potr.conf
