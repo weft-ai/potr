@@ -238,7 +238,7 @@ fi
 
 if [ $1 == "aws-docker-login" ]
 then
-    login_cmd=`$aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION`
+    login_cmd=`$aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION | tr -d '\r\n'`
     bash -c "$login_cmd"
 fi
 
