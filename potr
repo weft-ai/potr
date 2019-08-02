@@ -78,6 +78,7 @@ check_and_update_lock_file() {
 
     # Generate a testing script used if we fail
     RUN echo "cd $hashDir; find . -type f -print0 | sort -z | xargs -0 md5sum" > /potr/print_hashes.sh
+    RUN echo "find . -print0 | sort -z | xargs -0 stat -c \"%N %F %G %U %a\"" >> /potr/print_hashes.sh
 
     CMD ["cat", "hash"]
 EOF
@@ -103,7 +104,7 @@ EOF
             echo "If you have updated the build container definition run \"potr update\""
             echo "to update the lock file. If not, you probably have a non-stable build"
             echo "container, which you need to fix."
-            echo ""
+            echo "Saving container description..."
             echo ""
 
             describe_build_container
