@@ -181,11 +181,12 @@ Potr is a simple container build script. it is meant only to perform common out-
 Commands:
 
     build [args]- run the build container, optionally providing extra commands (or arguments) to the build container.
+    test - run the build container using the arguments defined in potr.conf test_command variable.
     deploy - run the build container and create a deploy container locally.
     update - update the locked build container definition.
     clean - remove the build and deployment containers for this project.
     drun 'cmd' - run the given command inside a deploy container.
-    push - build the deployment container and push it to the repo noted in the potr.conf file
+    push - build the deployment container and push it to the repo noted in the potr.conf file. Note it does not re-run the build.
     deploy - build the deployment container and put it in the local docker images.
 
 EOF
@@ -205,6 +206,13 @@ then
     rm $lockFileName
     build_container
     exit 0
+fi
+
+if [ $1 == "test" ]
+then
+    shift
+    run_build "${test_command}"
+    exit $?
 fi
 
 if [ $1 == "drun" ]
