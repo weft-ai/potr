@@ -222,7 +222,7 @@ fi
 if [ $1 == "test" ]
 then
     shift
-    run_build "${test_command}"
+    run_build ${test_command}
     exit $?
 fi
 
