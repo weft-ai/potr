@@ -52,6 +52,11 @@ build_container() {
 }
 
 check_and_update_lock_file() {
+    # XXX docker does not appear to handle file permissions and file
+    # ownership in a consistent way across versions.
+    if [ 0 -eq 1 ]
+    then
+
     # Get a hash of the build container
     mkdir -p $hashDockerPath
 
@@ -92,6 +97,7 @@ EOF
 
     hash=`docker run --rm $name-build-$shortId-hash`
 
+
     # If the lock file exists, check the id of the built container against it
     if [ -f $lockFileName ]
     then
@@ -117,6 +123,8 @@ EOF
     else
         echo "Updating lock file."
         echo "$hash" > $lockFileName
+    fi
+
     fi
 }
 
