@@ -8,21 +8,27 @@ actions outside the container. Inside the container you should use a normal buil
 To use potr on a project add a potr.conf file in the root of your project. An example potr.conf file might be:
 
 *potr.conf*
-> name="myproj"
+```
+name="myproj"
+```
 
 Also create a build-container folder and put a Dockerfile in it that will run your build assuming the source is in /src. For example, a golang build container might look like:
 
 *build-container/Dockerfile*
-> FROM golang:1.12.3-stretch
-> WORKDIR /src
-> CMD [ "go", "build", "-o", "/src/myproj" ]
+```
+FROM golang:1.12.3-stretch
+WORKDIR /src
+CMD [ "go", "build", "-o", "/src/myproj" ]
+```
 
 Finally, create a Dockerfile in the root to generate a deployment container from the built sources.  For our golang example we might use:
 
 *./Dockerfile*
-> FROM alpine:3.10.1
-> COPY myproj /bin
-> CMD [ "/bin/myproj" ]
+```
+FROM alpine:3.10.1
+COPY myproj /bin
+CMD [ "/bin/myproj" ]
+```
 
 Now to build the project, in the project root run:
 
@@ -45,7 +51,9 @@ This will:
 
 To run a custom operation in the build container run:
 
-> potr build yarn install
+```
+potr build yarn install
+```
 
 This will:
 
@@ -54,7 +62,9 @@ This will:
 
 If you update your build container potr will fail because it no longer matches your locked version. To update the locked version run:
 
-> potr update
+```
+potr update
+```
 
 This will build and hash the new container and store the new hash in potr.sum.
 
