@@ -33,8 +33,6 @@ build_container() {
     # Always build the docker image; because of caching it is cheap
     ( set -x; cd $build_container_dir; docker build --iidfile $tempFileName -t potr-temp-$$ . )
 
-    cd ..
-
     if [ $? -ne 0 ]
     then
         # If the build command failed, then exit
