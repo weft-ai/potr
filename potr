@@ -4,7 +4,9 @@
 
 set -e
 
-version="latest"
+# These parameters are overridable in potr.conf.
+build_args="-v `pwd`:/src"
+build_container_dir="build-container"
 
 if [ ! -f "potr.conf" ]
 then
@@ -12,6 +14,12 @@ then
 fi
 
 source potr.conf
+
+if [ "$name" == "" ]
+then
+    echo "potr.conf must contain at least a name definition: name=\"myproj\""  
+    exit 1
+fi
 
 tempFileName="/tmp/potr.$$"
 hashDockerPath="/tmp/potr.hash.$$"
@@ -21,14 +29,10 @@ mkdir -p /tmp/potr-build
 
 aws="docker run --rm -t -e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} mesosphere/aws-cli"
 
-run_print() {
-    echo $1
-    eval $1
-}
-
 build_container() {
     # Always build the docker image; because of caching it is cheap
-    run_print "cd build-container; docker build --iidfile $tempFileName -t potr-temp-$$ ."
+    ( set -x; cd $build_container_dir; docker build --iidfile $tempFileName -t potr-temp-$$ . )
+
     cd ..
 
     if [ $? -ne 0 ]
@@ -43,8 +47,8 @@ build_container() {
     shortId=${id: -14}
     rm $tempFileName
 
-    run_print "docker tag $id $name-build-$shortId"
-    docker rmi potr-temp-$$
+    ( set -x; docker tag $id $name-build-$shortId )
+    ( set -x; docker rmi potr-temp-$$ )
 
     check_and_update_lock_file
 }
@@ -119,7 +123,7 @@ EOF
 }
 
 deploy_container() {
-    run_print "docker build --iidfile $tempFileName -t $name ."
+    ( set -x; docker build --iidfile $tempFileName -t $name . )
 
     if [ $? -ne 0 ]
     then
@@ -142,15 +146,15 @@ run_build() {
 
     # Run the given command in the build container. If nothing is provided, default
     # the build container default.
-    run_print "docker run -ti --rm $build_args $id $@"
+    ( set -x; docker run -ti --rm $build_args $id "$@" )
 }
 
 run_deploy() {
     deploy_container
 
     # Run the given command in the deploy container. If nothing is provided, default
-    # the deploy container default.
-    run_print "docker run -ti --rm $run_args $did $@"
+    # to the deploy container default.
+    ( set -x; docker run -ti --rm $run_args $did "$@" )
 }
 
 if [ "$#" -eq 0 ]
@@ -176,25 +180,32 @@ if [ $1 == "help" ] || [ $1 == "-h" ] || [ $1 == "--help" ]
 then
     cat << EOF
 
-Potr is a simple container build script. it is meant only to perform common out-of-container operations (build a build container, run it etc.) Run with no arguments it will run the build container without passing any arguments.
+Potr is a simple container build script. it is meant only to perform common out-of-container operations (build a build container, run it etc.) Run with no arguments is equivalent to "potr build".
 
 Commands:
 
     build [args]- run the build container, optionally providing extra commands (or arguments) to the build container.
+    run [args]- same as build.
     test - run the build container using the arguments defined in potr.conf test_command variable.
     deploy - run the build container and create a deploy container locally.
     update - update the locked build container definition.
     clean - remove the build and deployment containers for this project.
     drun 'cmd' - run the given command inside a deploy container.
     push - build the deployment container and push it to the repo noted in the potr.conf file. Note it does not re-run the build.
-    deploy - build the deployment container and put it in the local docker images.
-
+b
 EOF
 
     exit 0
 fi
 
 if [ $1 == "build" ]
+then
+    shift
+    run_build "$@"
+    exit $?
+fi
+
+if [ $1 == "run" ]
 then
     shift
     run_build "$@"
@@ -288,7 +299,7 @@ then
 
     for version in ${tags}
     do
-        run_print "docker tag $did $docker_repo:$version"
-        run_print "docker push $docker_repo:$version"
+        ( set -x; docker tag $did "$docker_repo:$version" )
+        ( set -x; docker push "$docker_repo:$version" )
     done
 fi
