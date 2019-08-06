@@ -32,7 +32,9 @@ CMD [ "/bin/myproj" ]
 
 Now to build the project, in the project root run:
 
-> potr
+```
+potr
+```
 
 This will:
 
@@ -42,7 +44,9 @@ This will:
 
 To package the built project into a container run:
 
-> potr deploy
+```
+potr deploy
+```
 
 This will:
 
