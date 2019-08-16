@@ -7,6 +7,7 @@ set -e
 # These parameters are overridable in potr.conf.
 build_args="-v `pwd`:/src"
 build_container_dir="build-container"
+cmd_prefix=""
 
 if [ ! -f "potr.conf" ]
 then
@@ -25,13 +26,13 @@ tempFileName="/tmp/potr.$$"
 hashDockerPath="/tmp/potr.hash.$$"
 lockFileName="potr.sum"
 
-mkdir -p /tmp/potr-build
+$cmd_prefix mkdir -p /tmp/potr-build
 
-aws="docker run --rm -t -e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} mesosphere/aws-cli"
+aws="$cmd_prefix docker run --rm -t -e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} mesosphere/aws-cli"
 
 build_container() {
     # Always build the docker image; because of caching it is cheap
-    ( set -x; cd $build_container_dir; docker build --iidfile $tempFileName -t potr-temp-$$ . )
+    ( set -x; cd $build_container_dir; $cmd_prefix docker build --iidfile $tempFileName -t potr-temp-$$ . )
 
     if [ $? -ne 0 ]
     then
@@ -45,8 +46,8 @@ build_container() {
     shortId=${id: -14}
     rm $tempFileName
 
-    ( set -x; docker tag $id $name-build-$shortId )
-    ( set -x; docker rmi potr-temp-$$ )
+    ( set -x; $cmd_prefix docker tag $id $name-build-$shortId )
+    ( set -x; $cmd_prefix docker rmi potr-temp-$$ )
 
     check_and_update_lock_file
 }
@@ -58,11 +59,11 @@ check_and_update_lock_file() {
     then
 
     # Get a hash of the build container
-    mkdir -p $hashDockerPath
+    $cmd_prefix mkdir -p $hashDockerPath
 
-    docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}' $id > $hashDockerPath/env
-    docker inspect -f '{{json .Config.Cmd}}' $id > $hashDockerPath/cmd
-    docker inspect -f '{{json .Config.Entrypoint}}' $id > $hashDockerPath/entrypoint
+    $cmd_prefix docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}' $id > $hashDockerPath/env
+    $cmd_prefix docker inspect -f '{{json .Config.Cmd}}' $id > $hashDockerPath/cmd
+    $cmd_prefix docker inspect -f '{{json .Config.Entrypoint}}' $id > $hashDockerPath/entrypoint
 
     hashDir="/potr/to-hash"
 
@@ -91,11 +92,11 @@ check_and_update_lock_file() {
     CMD ["cat", "hash"]
 EOF
 
-    docker build -t $name-build-$shortId-hash $hashDockerPath
+    $cmd_prefix docker build -t $name-build-$shortId-hash $hashDockerPath
 
-    rm -rf $hashDockerPath
+    $cmd_prefix rm -rf $hashDockerPath
 
-    hash=`docker run --rm $name-build-$shortId-hash`
+    hash=`$cmd_prefix docker run --rm $name-build-$shortId-hash`
 
 
     # If the lock file exists, check the id of the built container against it
@@ -129,7 +130,7 @@ EOF
 }
 
 deploy_container() {
-    ( set -x; docker build --iidfile $tempFileName -t $name . )
+    ( set -x; $cmd_prefix docker build --iidfile $tempFileName -t $name . )
 
     if [ $? -ne 0 ]
     then
@@ -144,7 +145,7 @@ deploy_container() {
 }
 
 describe_build_container() {
-    docker run --rm $name-build-$shortId-hash bash /potr/print_hashes.sh > /tmp/potr-build/build-container-description
+    $cmd_prefix docker run --rm $name-build-$shortId-hash bash /potr/print_hashes.sh > /tmp/potr-build/build-container-description
 }
 
 run_build() {
@@ -152,7 +153,7 @@ run_build() {
 
     # Run the given command in the build container. If nothing is provided, default
     # the build container default.
-    ( set -x; docker run -ti --rm $build_args $id "$@" )
+    ( set -x; $cmd_prefix docker run -ti --rm $build_args $id "$@" )
 }
 
 run_deploy() {
@@ -160,7 +161,7 @@ run_deploy() {
 
     # Run the given command in the deploy container. If nothing is provided, default
     # to the deploy container default.
-    ( set -x; docker run -ti --rm $run_args $did "$@" )
+    ( set -x; $cmd_prefix docker run -ti --rm $run_args $did "$@" )
 }
 
 if [ "$#" -eq 0 ]
@@ -175,7 +176,13 @@ then
     shift
 fi
 
-# Try again to make dbuild -d work
+if [ $1 == "-s" ]
+then
+    cmd_prefix="sudo"
+    shift
+fi
+
+# Try again to make potr work options but no command.
 if [ "$#" -eq 0 ]
 then
     run_build "$@"
@@ -256,8 +263,8 @@ fi
 
 if [ $1 == "clean" ]
 then
-    images=`docker images -q $name-build-*`
-    docker rmi $images
+    images=`$cmd_prefix docker images -q $name-build-*`
+    $cmd_prefix docker rmi $images
     exit $?
 fi
 
@@ -305,7 +312,7 @@ then
 
     for version in ${tags}
     do
-        ( set -x; docker tag $did "$docker_repo:$version" )
-        ( set -x; docker push "$docker_repo:$version" )
+        ( set -x; $cmd_prefix docker tag $did "$docker_repo:$version" )
+        ( set -x; $cmd_prefix docker push "$docker_repo:$version" )
     done
 fi
