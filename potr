@@ -44,7 +44,7 @@ build_container() {
     # versions building on the same machine.
     id=`cat $tempFileName`
     shortId=${id: -14}
-    rm $tempFileName
+    $cmd_prefix rm $tempFileName
 
     ( set -x; $cmd_prefix docker tag $id $name-build-$shortId )
     ( set -x; $cmd_prefix docker rmi potr-temp-$$ )
@@ -141,7 +141,7 @@ deploy_container() {
     # Use the id instead of the tag so we can support multiple different
     # versions building on the same machine.
     did=`cat $tempFileName`
-    rm $tempFileName
+    $cmd_prefix rm $tempFileName
 }
 
 describe_build_container() {
@@ -227,7 +227,7 @@ fi
 
 if [ $1 == "update" ]
 then
-    rm $lockFileName
+    $cmd_prefix rm $lockFileName
     build_container
     exit 0
 fi
