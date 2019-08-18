@@ -157,12 +157,12 @@ check_setup() {
     version_cmd="docker version -f '{{.Server.Version}}'"
 
     # Try to get the docker version
-    v=`$version_cmd`
+    v=$($version_cmd)
 
     # If we failed, try again with sudo
     if [ $? -ne 0 ]
     then
-        v=`sudo $version_cmd`
+        v=$(sudo $version_cmd)
 
         # If we still failed then exit.
         if [ $? -ne 0 ]
