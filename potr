@@ -2,33 +2,29 @@
 
 # Simple script to run build commands in docker.
 
-set -e
-
-# These parameters are overridable in potr.conf.
-build_args="-v `pwd`:/src"
-build_container_dir="build-container"
-cmd_prefix=""
-
-if [ ! -f "potr.conf" ]
-then
-    echo "This directory doesn't appear to be a potr project root. No potr.conf file found."
-fi
-
-source potr.conf
-
-if [ "$name" == "" ]
-then
-    echo "potr.conf must contain at least a name definition: name=\"myproj\""  
-    exit 1
-fi
+############# FUNCTIONS AND CONSTANTS
 
 tempFileName="/tmp/potr.$$"
 hashDockerPath="/tmp/potr.hash.$$"
 lockFileName="potr.sum"
 
-$cmd_prefix mkdir -p /tmp/potr-build
+print_help() {
+    cat << EOF
 
-aws="$cmd_prefix docker run --rm -t -e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} mesosphere/aws-cli"
+Potr is a simple container build script. it is meant only to perform common out-of-container operations (build a build container, run it etc.) Run with no arguments is equivalent to "potr build".
+
+Commands:
+
+    build [args]- run the build container, optionally providing extra commands (or arguments) to the build container.
+    run [args]- same as build.
+    test - run the build container using the arguments defined in potr.conf test_command variable.
+    deploy - run the build container and create a deploy container locally.
+    update - update the locked build container definition.
+    clean - remove the build and deployment containers for this project.
+    drun 'cmd' - run the given command inside a deploy container.
+    push - build the deployment container and push it to the repo noted in the potr.conf file. Note it does not re-run the build.
+EOF
+}
 
 build_container() {
     # Always build the docker image; because of caching it is cheap
@@ -49,15 +45,10 @@ build_container() {
     ( set -x; $cmd_prefix docker tag $id $name-build-$shortId )
     ( set -x; $cmd_prefix docker rmi potr-temp-$$ )
 
-    check_and_update_lock_file
+    #check_and_update_lock_file
 }
 
 check_and_update_lock_file() {
-    # XXX docker does not appear to handle file permissions and file
-    # ownership in a consistent way across versions.
-    if [ 0 -eq 1 ]
-    then
-
     # Get a hash of the build container
     $cmd_prefix mkdir -p $hashDockerPath
 
@@ -125,8 +116,6 @@ EOF
         echo "Updating lock file."
         echo "$hash" > $lockFileName
     fi
-
-    fi
 }
 
 deploy_container() {
@@ -164,6 +153,62 @@ run_deploy() {
     ( set -x; $cmd_prefix docker run -ti --rm $run_args $did "$@" )
 }
 
+check_setup() {
+    version_cmd="docker version -f '{{.Server.Version}}'"
+
+    # Try to get the docker version
+    v=`$version_cmd`
+
+    # If we failed, try again with sudo
+    if [ $? -ne 0 ]
+    then
+        v=`sudo $version_cmd`
+
+        # If we still failed then exit.
+        if [ $? -ne 0 ]
+        then
+            echo "Couldn't run docker version cmd."
+            print $v
+            exit $?
+        fi
+
+        # Otherwise use sudo for docker.        
+        cmd_prefix="sudo"
+    fi
+
+    # Check the version
+    echo $v
+}
+
+############# MAIN LOGIC
+
+set -e
+
+$cmd_prefix mkdir -p /tmp/potr-build
+
+# These parameters are overridable in potr.conf.
+build_args="-v `pwd`:/src"
+build_container_dir="build-container"
+cmd_prefix=""
+
+# Read config and validate.
+
+if [ ! -f "potr.conf" ]
+then
+    echo "This directory doesn't appear to be a potr project root. No potr.conf file found."
+fi
+
+source potr.conf
+
+if [ "$name" == "" ]
+then
+    echo "potr.conf must contain at least a name definition: name=\"myproj\""  
+    exit 1
+fi
+
+# Check for setup specfic parameters and requirements.
+check_setup
+
 if [ "$#" -eq 0 ]
 then
     run_build "$@"
@@ -191,22 +236,6 @@ fi
 
 if [ $1 == "help" ] || [ $1 == "-h" ] || [ $1 == "--help" ]
 then
-    cat << EOF
-
-Potr is a simple container build script. it is meant only to perform common out-of-container operations (build a build container, run it etc.) Run with no arguments is equivalent to "potr build".
-
-Commands:
-
-    build [args]- run the build container, optionally providing extra commands (or arguments) to the build container.
-    run [args]- same as build.
-    test - run the build container using the arguments defined in potr.conf test_command variable.
-    deploy - run the build container and create a deploy container locally.
-    update - update the locked build container definition.
-    clean - remove the build and deployment containers for this project.
-    drun 'cmd' - run the given command inside a deploy container.
-    push - build the deployment container and push it to the repo noted in the potr.conf file. Note it does not re-run the build.
-b
-EOF
 
     exit 0
 fi
@@ -267,6 +296,8 @@ then
     $cmd_prefix docker rmi $images
     exit $?
 fi
+
+aws="$cmd_prefix docker run --rm -t -e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} mesosphere/aws-cli"
 
 if [ $1 == "aws-docker-login" ]
 then
