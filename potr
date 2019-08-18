@@ -156,7 +156,7 @@ run_deploy() {
 check_setup() {
     set +e
 
-    version_cmd="unset -e; docker version -f '{{.Server.Version}}'"
+    version_cmd="docker version -f '{{.Server.Version}}'"
 
     # Try to get the docker version
     v=`$version_cmd`
