@@ -240,18 +240,11 @@ fi
 
 if [ $1 == "help" ] || [ $1 == "-h" ] || [ $1 == "--help" ]
 then
-
+    print_help
     exit 0
 fi
 
-if [ $1 == "build" ]
-then
-    shift
-    run_build "$@"
-    exit $?
-fi
-
-if [ $1 == "run" ]
+if [ $1 == "build" ] || [ $1 == "run" ]
 then
     shift
     run_build "$@"
@@ -262,13 +255,6 @@ if [ $1 == "update" ]
 then
     $cmd_prefix rm $lockFileName
     build_container
-    exit 0
-fi
-
-if [ $1 == "test" ]
-then
-    shift
-    run_build ${test_command}
     exit $?
 fi
 
