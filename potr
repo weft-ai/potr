@@ -264,7 +264,7 @@ then
 
     shift
 
-    run_deploy
+    run_deploy "$@"
     exit $?
 fi
 
