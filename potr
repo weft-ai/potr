@@ -122,13 +122,18 @@ EOF
 }
 
 deploy_container() {
-    ( set -x; $cmd_prefix $docker_cmd build -t $name . )
+    ( set -x; $cmd_prefix $docker_cmd build --iidfile $tempFileName -t $name . )
 
     if [ $? -ne 0 ]
     then
         # If the build command failed, then exit
         exit $?
     fi
+
+    # Use the id instead of the tag so we can support multiple different
+    # versions building on the same machine.
+    did=`cat $tempFileName`
+    $cmd_prefix rm $tempFileName
 }
 
 describe_build_container() {
