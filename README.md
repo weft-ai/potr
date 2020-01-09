@@ -85,7 +85,7 @@ support docker. You can run a containerized build with nothing but docker itself
 ## Development
 
 *Developing* an application in a container is a little trickier. Just putting your build in a 
-container definition doesn't easily allow for incremental builds, running from local sources, running extra commands, running debuggers,  etc. Most project get around this by running builds with Makefiles outside of the containers. Potr does that work for you.
+container definition doesn't easily allow for incremental builds, running from local sources, running extra commands, running debuggers, etc. Most project get around this by running builds with Makefiles outside of the containers. Potr does that work for you.
 
 ## From source
 

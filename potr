@@ -15,20 +15,23 @@ Potr is a simple container build script. it is meant only to perform common out-
 
 Commands:
 
-    build [args]- run the build container, optionally providing extra commands (or arguments) to the build container.
-    run [args]- same as build.
-    test - run the build container using the arguments defined in potr.conf test_command variable.
+    run [args]- run the given command in the build container.
     deploy - run the build container and create a deploy container locally.
     update - update the locked build container definition.
     clean - remove the build and deployment containers for this project.
-    drun 'cmd' - run the given command inside a deploy container.
     push - build the deployment container and push it to the repo noted in the potr.conf file. Note it does not re-run the build.
+
+Options in the potr.conf file:
+
+    name - name of the project, used in the container names.
+    common_args - args passed to every command run
+    <command name>_args - args passed to the given command name (in addition to the common args).
 EOF
 }
 
 build_container() {
     # Always build the docker image; because of caching it is cheap
-    ( set -x; cd $build_container_dir; $cmd_prefix docker build --iidfile $tempFileName -t potr-temp-$$ . )
+    ( set -x; cd $build_container_dir; $cmd_prefix $docker_cmd build --iidfile $tempFileName -t potr-temp-$$ . )
 
     if [ $? -ne 0 ]
     then
@@ -42,8 +45,8 @@ build_container() {
     shortId=${id: -14}
     $cmd_prefix rm $tempFileName
 
-    ( set -x; $cmd_prefix docker tag $id $name-build-$shortId )
-    ( set -x; $cmd_prefix docker rmi potr-temp-$$ )
+    ( set -x; $cmd_prefix $docker_cmd tag $id $name-build-$shortId )
+    ( set -x; $cmd_prefix $docker_cmd rmi potr-temp-$$ )
 
     #check_and_update_lock_file
 }
@@ -52,9 +55,9 @@ check_and_update_lock_file() {
     # Get a hash of the build container
     $cmd_prefix mkdir -p $hashDockerPath
 
-    $cmd_prefix docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}' $id > $hashDockerPath/env
-    $cmd_prefix docker inspect -f '{{json .Config.Cmd}}' $id > $hashDockerPath/cmd
-    $cmd_prefix docker inspect -f '{{json .Config.Entrypoint}}' $id > $hashDockerPath/entrypoint
+    $cmd_prefix $docker_cmd inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}' $id > $hashDockerPath/env
+    $cmd_prefix $docker_cmd inspect -f '{{json .Config.Cmd}}' $id > $hashDockerPath/cmd
+    $cmd_prefix $docker_cmd inspect -f '{{json .Config.Entrypoint}}' $id > $hashDockerPath/entrypoint
 
     hashDir="/potr/to-hash"
 
@@ -83,11 +86,11 @@ check_and_update_lock_file() {
     CMD ["cat", "hash"]
 EOF
 
-    $cmd_prefix docker build -t $name-build-$shortId-hash $hashDockerPath
+    $cmd_prefix $docker_cmd build -t $name-build-$shortId-hash $hashDockerPath
 
     $cmd_prefix rm -rf $hashDockerPath
 
-    hash=`$cmd_prefix docker run --rm $name-build-$shortId-hash`
+    hash=`$cmd_prefix $docker_cmd run --rm $name-build-$shortId-hash`
 
 
     # If the lock file exists, check the id of the built container against it
@@ -119,38 +122,39 @@ EOF
 }
 
 deploy_container() {
-    ( set -x; $cmd_prefix docker build --iidfile $tempFileName -t $name . )
+    ( set -x; $cmd_prefix $docker_cmd build -t $name . )
 
     if [ $? -ne 0 ]
     then
         # If the build command failed, then exit
         exit $?
     fi
-
-    # Use the id instead of the tag so we can support multiple different
-    # versions building on the same machine.
-    did=`cat $tempFileName`
-    $cmd_prefix rm $tempFileName
 }
 
 describe_build_container() {
-    $cmd_prefix docker run --rm $name-build-$shortId-hash bash /potr/print_hashes.sh > /tmp/potr-build/build-container-description
+    $cmd_prefix $docker_cmd run --rm $name-build-$shortId-hash bash /potr/print_hashes.sh > /tmp/potr-build/build-container-description
 }
 
-run_build() {
+run() {
+    # If we have a user defined network listed in the conf, then create
+    # it if it doesn't exist already.
+    if [ "$docker_network" != "" ]
+    then
+        $cmd_prefix $docker_cmd network create $docker_network || true
+    fi
+
     build_container
+
+    cmd="$1"
+
+    # Get the extra args for this command (if they exist)
+    args_name="${cmd}_args"
+    extra_args="${!args_name}"
+    build_args="$common_args $extra_args"
 
     # Run the given command in the build container. If nothing is provided, default
     # the build container default.
-    ( set -x; $cmd_prefix docker run -ti --rm $build_args $id "$@" )
-}
-
-run_deploy() {
-    deploy_container
-
-    # Run the given command in the deploy container. If nothing is provided, default
-    # to the deploy container default.
-    ( set -x; $cmd_prefix docker run -ti --rm $run_args $did "$@" )
+    ( set -x; $cmd_prefix $docker_cmd run -ti --rm $build_args $id "$@" )
 }
 
 check_setup() {
@@ -191,8 +195,9 @@ set -e
 $cmd_prefix mkdir -p /tmp/potr-build
 
 # These parameters are overridable in potr.conf.
-build_args="-v `pwd`:/src"
+common_args="-v `pwd`:/src"
 build_container_dir="build-container"
+docker_cmd="docker"
 cmd_prefix=""
 
 # Read config and validate.
@@ -215,7 +220,7 @@ check_setup
 
 if [ "$#" -eq 0 ]
 then
-    run_build "$@"
+    run "$@"
     exit $?
 fi
 
@@ -231,10 +236,10 @@ then
     shift
 fi
 
-# Try again to make potr work options but no command.
+# Try again to make potr work with options but no command.
 if [ "$#" -eq 0 ]
 then
-    run_build "$@"
+    run "$@"
     exit $?
 fi
 
@@ -244,10 +249,10 @@ then
     exit 0
 fi
 
-if [ $1 == "build" ] || [ $1 == "run" ]
+if [ $1 == "run" ]
 then
     shift
-    run_build "$@"
+    run "$@"
     exit $?
 fi
 
@@ -255,16 +260,6 @@ if [ $1 == "update" ]
 then
     $cmd_prefix rm $lockFileName
     build_container
-    exit $?
-fi
-
-if [ $1 == "drun" ]
-then
-    run_build
-
-    shift
-
-    run_deploy "$@"
     exit $?
 fi
 
@@ -282,12 +277,12 @@ fi
 
 if [ $1 == "clean" ]
 then
-    images=`$cmd_prefix docker images -q $name-build-*`
-    $cmd_prefix docker rmi $images
+    images=`$cmd_prefix $docker_cmd images -q $name-build-*`
+    $cmd_prefix $docker_cmd rmi $images
     exit $?
 fi
 
-aws="$cmd_prefix docker run --rm -t -e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} mesosphere/aws-cli"
+aws="$cmd_prefix $docker_cmd run --rm -t -e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} -e AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION} mesosphere/aws-cli"
 
 if [ $1 == "aws-docker-login" ]
 then
@@ -333,7 +328,7 @@ then
 
     for version in ${tags}
     do
-        ( set -x; $cmd_prefix docker tag $did "$docker_repo:$version" )
-        ( set -x; $cmd_prefix docker push "$docker_repo:$version" )
+        ( set -x; $cmd_prefix $docker_cmd tag $did "$docker_repo:$version" )
+        ( set -x; $cmd_prefix $docker_cmd push "$docker_repo:$version" )
     done
 fi
