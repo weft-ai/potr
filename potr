@@ -24,7 +24,7 @@ Commands:
 Options in the potr.conf file:
 
     name - name of the project, used in the container names.
-    common_args - args passed to every command run
+    args_common - args passed to every command run
     <command name>_args - args passed to the given command name (in addition to the common args).
 EOF
 }
@@ -150,7 +150,7 @@ run() {
     # Get the extra args for this command (if they exist)
     args_name="${cmd}_args"
     extra_args="${!args_name}"
-    build_args="$common_args $extra_args"
+    build_args="$args_common $extra_args"
 
     # Run the given command in the build container. If nothing is provided, default
     # the build container default.
@@ -195,7 +195,7 @@ set -e
 $cmd_prefix mkdir -p /tmp/potr-build
 
 # These parameters are overridable in potr.conf.
-common_args="-v `pwd`:/src"
+args_common="-v `pwd`:/src"
 build_container_dir="build-container"
 docker_cmd="docker"
 cmd_prefix=""
