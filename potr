@@ -298,7 +298,7 @@ fi
 if [ $1 == "deploy" ]
 then
     # Build the code
-    run_build
+    run
     if [ $? -ne 0 ]
     then
         # If the build command failed, then exit
